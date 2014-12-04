@@ -1,0 +1,1101 @@
+<?php
+/*
+Copyright (C) 2008-2013 Stephane Graber <stgraber@ubuntu.com>
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+*/
+
+function qatracker_schema() {
+    $schema = array();
+    $schema['qatracker_bug'] = array(
+        'description' => 'Relation between a result and a bug',
+        'fields' => array(
+            'id' => array(
+                'type' => 'serial',
+                'not null' => TRUE,
+                'description' => 'Primary Key',
+            ),
+            'resultid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_result',
+            ),
+            'bugnumber' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Bug number',
+            ),
+            'bugimportance' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Bug importance',
+            )
+        ),
+        'primary key' => array('id'),
+    );
+
+    $schema['qatracker_build'] = array(
+        'description' => 'A build of a given product for a given milestone',
+        'fields' => array(
+            'id' => array(
+                'type' => 'serial',
+                'not null' => TRUE,
+                'description' => 'Primary Key',
+            ),
+            'productid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_product',
+            ),
+            'version' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'Version number of the build',
+            ),
+            'available' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'default' => 1,
+                'size' => 'small',
+                'description' => 'Availability of the build for download. 0 = unavailable, 1 = available',
+            )
+        ),
+        'primary key' => array('id'),
+    );
+
+    $schema['qatracker_build_milestone'] = array(
+        'description' => 'Link between builds and milestones',
+        'fields' => array(
+            'id' => array(
+                'type' => 'serial',
+                'not null' => TRUE,
+                'description' => 'Primary Key',
+            ),
+            'buildid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_build',
+            ),
+            'milestoneid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_milestone',
+            ),
+            'userid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'User who posted the build',
+            ),
+            'note' => array(
+                'type' => 'varchar',
+                'not null' => FALSE,
+                'description' => 'Note attached to the build, for example, rebuild reason',
+            ),
+            'date' => array(
+                'type' => 'varchar',
+                'pgsql_type' => 'timestamp without time zone',
+                'not null' => TRUE,
+                'description' => 'Date at which the build was added',
+            ),
+            'status' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'default' => 0,
+                'size' => 'small',
+                'description' => 'Visibility status of the build. 0 = active, 1 = rebuild, 2 = disabled, 3 = superseded, 4 = ready',
+            ),
+        ),
+        'primary key' => array('id'),
+    );
+
+    $schema['qatracker_rebuild'] = array(
+        'description' => 'List of requested rebuilds',
+        'fields' => array(
+            'id' => array(
+                'type' => 'serial',
+                'not null' => TRUE,
+                'description' => 'Primary Key',
+            ),
+            'seriesid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_build',
+            ),
+            'productid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_product',
+            ),
+            'milestoneid' => array(
+                'type' => 'int',
+                'not null' => FALSE,
+                'description' => 'Optional relation with qatracker_milestone, set if aimed to a specific milestone.',
+            ),
+            'requestedby' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'User who requested the rebuild',
+            ),
+            'requestedat' => array(
+                'type' => 'varchar',
+                'pgsql_type' => 'timestamp without time zone',
+                'not null' => TRUE,
+                'description' => 'Date at which the rebuild was requested',
+            ),
+            'changedby' => array(
+                'type' => 'int',
+                'not null' => FALSE,
+                'description' => 'User who requested the rebuild',
+            ),
+            'changedat' => array(
+                'type' => 'varchar',
+                'pgsql_type' => 'timestamp without time zone',
+                'not null' => FALSE,
+                'description' => 'Date at which the rebuild was requested',
+            ),
+            'status' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'default' => 0,
+                'size' => 'small',
+                'description' => 'Rebuild progress. 0 = requested, 1 = queued, 2 = building, 3 = built, 4 = published, 5 = canceled',
+            ),
+        ),
+        'primary key' => array('id'),
+    );
+
+    $schema['qatracker_launchpad_bug'] = array(
+        'description' => 'Launchpad bug information cache',
+        'fields' => array(
+            'id' => array(
+                'type' => 'serial',
+                'not null' => TRUE,
+                'description' => 'Primary Key',
+            ),
+            'originalbug' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Original bug number',
+            ),
+            'bugnumber' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Active bug number',
+            ),
+            'title' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'Bug title',
+            ),
+            'product' => array(
+                'type' => 'varchar',
+                'not null' => FALSE,
+                'description' => 'Product name',
+            ),
+            'status' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'Bug status',
+            ),
+            'importance' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'Bug importance',
+            ),
+            'assignee' => array(
+                'type' => 'varchar',
+                'not null' => FALSE,
+                'description' => 'Assignee',
+            ),
+            'commentscount' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Number of comments',
+            ),
+            'duplicatescount' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Number of duplicates',
+            ),
+            'subscriberscount' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Number of subscribers',
+            ),
+            'lastchange' => array(
+                'type' => 'varchar',
+                'pgsql_type' => 'timestamp without time zone',
+                'not null' => FALSE,
+                'description' => 'Date at which the entry has last been modified',
+            ),
+        ),
+        'primary key' => array('id'),
+        'indexes' => array(
+            'qatracker_launchpad_bug_bugnumber' => array('bugnumber'),
+            'qatracker_launchpad_bug_originalbug' => array('originalbug'),
+        ),
+    );
+
+    $schema['qatracker_milestone'] = array(
+        'description' => 'Milestone used to group builds',
+        'fields' => array(
+            'id' => array(
+                'type' => 'serial',
+                'not null' => TRUE,
+                'description' => 'Primary Key',
+            ),
+            'seriesid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_milestone_series',
+            ),
+            'siteid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_site',
+            ),
+            'title' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'Name of the milestone',
+            ),
+            'notify' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'default' => 1,
+                'size' => 'small',
+                'description' => 'Whether or not to notify subscribers. 0 = enabled, 1 = disabled',
+            ),
+            'autofill' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'default' => 0,
+                'size' => 'small',
+                'description' => 'Whether or not to automatically fill based on manifest. 0 = enabled, 1 = disabled',
+            ),
+            'status' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'default' => 0,
+                'size' => 'small',
+                'description' => 'Visibility status of the milestone. 0 = testing, 1 = released, 2 = disabled',
+            ),
+        ),
+        'primary key' => array('id'),
+    );
+
+    $schema['qatracker_milestone_series'] = array(
+        'description' => 'Series to be assigned to milestones',
+        'fields' => array(
+            'id' => array(
+                'type' => 'serial',
+                'not null' => TRUE,
+                'description' => 'Primary Key',
+            ),
+            'siteid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_site',
+            ),
+            'title' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'Tite of the series',
+            ),
+            'status' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'default' => 0,
+                'size' => 'small',
+                'description' => 'Status of the series. 0 = active, 1 = disabled',
+            ),
+        ),
+        'primary key' => array('id'),
+    );
+
+    $schema['qatracker_milestone_series_manifest'] = array(
+        'description' => 'Milestone/Series product manifest',
+        'fields' => array(
+            'id' => array(
+                'type' => 'serial',
+                'not null' => TRUE,
+                'description' => 'Primary Key',
+            ),
+            'seriesid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_milestone_series',
+            ),
+            'productid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_product',
+            ),
+            'contact' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'Contact person',
+            ),
+            'status' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'default' => 0,
+                'size' => 'small',
+                'description' => 'Status of the entry. 0 = active, 1 = disabled',
+            ),
+        ),
+        'primary key' => array('id'),
+    );
+
+    $schema['qatracker_product'] = array(
+        'description' => 'Products available for testing',
+        'fields' => array(
+            'id' => array(
+                'type' => 'serial',
+                'not null' => TRUE,
+                'description' => 'Primary Key',
+            ),
+            'siteid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_site',
+            ),
+            'familyid' => array(
+                'type' => 'int',
+                'not null' => FALSE,
+                'description' => 'Relation with qatracker_product_family',
+            ),
+            'title' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'Name of the product',
+            ),
+            'type' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'size' => 'small',
+                'description' => 'Type of product. 0 = iso, 1 = package, 2 = hardware',
+            ),
+            'status' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'default' => 0,
+                'size' => 'small',
+                'description' => 'Visibility status of the product. 0 = visible, 1 = disabled',
+            ),
+            'ownerrole' => array(
+                'type' => 'int',
+                'not null' => FALSE,
+                'description' => 'Role allowed to update the product, related testsuites, downloads and build records',
+            ),
+            'buginstruction' => array(
+                'type' => 'varchar',
+                'not null' => FALSE,
+                'description' => 'Bug reporting instructions for the product',
+            ),
+        ),
+        'primary key' => array('id'),
+    );
+
+    $schema['qatracker_product_download'] = array(
+        'description' => 'Download links for a product',
+        'fields' => array(
+            'id' => array(
+                'type' => 'serial',
+                'not null' => TRUE,
+                'description' => 'Primary Key',
+            ),
+            'productid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_product',
+            ),
+            'seriesid' => array(
+                'type' => 'int',
+                'not null' => FALSE,
+                'description' => 'Relation with qatracker_milestone_series',
+            ),
+            'filename' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'Filename',
+            ),
+            'path' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'Path/URL to the file',
+            ),
+            'type' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'default' => 0,
+                'size' => 'small',
+                'description' => 'Type of path. 0 = http_file, 1 = rsync_file, 2 = zsync_file, 3 = gpg, 4 = md5, 5 = comment (filename is the title), 6 = torrent',
+            ),
+        ),
+        'primary key' => array('id'),
+    );
+
+    $schema['qatracker_product_family'] = array(
+        'description' => 'Families used to generate the different product views',
+        'fields' => array(
+            'id' => array(
+                'type' => 'serial',
+                'not null' => TRUE,
+                'description' => 'Primary Key',
+            ),
+            'siteid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_site',
+            ),
+            'title' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'Title for the filter as it appears in the block',
+            ),
+            'weight' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'default' => 0,
+                'size' => 'small',
+                'description' => 'Weight for ordering',
+            ),
+        ),
+        'primary key' => array('id'),
+    );
+
+    $schema['qatracker_result'] = array(
+        'description' => 'Result for a given build and testcase',
+        'fields' => array(
+            'id' => array(
+                'type' => 'serial',
+                'not null' => TRUE,
+                'description' => 'Primary Key',
+            ),
+            'buildid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_build',
+            ),
+            'testcaseid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_testcase',
+            ),
+            'revisionid' => array(
+                'type' => 'int',
+                'not null' => FALSE,
+                'description' => 'Relation with qatracker_testcase_revision',
+            ),
+            'reporterid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'ID of the user reporting the result',
+            ),
+            'date' => array(
+                'type' => 'varchar',
+                'pgsql_type' => 'timestamp without time zone',
+                'not null' => TRUE,
+                'description' => 'Date at which the result was first posted',
+            ),
+            'result' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'size' => 'small',
+                'description' => 'Result. 0 = failed, 1 = pass, 2 = in-progress',
+            ),
+            'comment' => array(
+                'type' => 'varchar',
+                'not null' => FALSE,
+                'description' => 'Comment',
+            ),
+            'hardware' => array(
+                'type' => 'varchar',
+                'not null' => FALSE,
+                'description' => 'Link to hardware profile',
+            ),
+            'lastchange' => array(
+                'type' => 'varchar',
+                'pgsql_type' => 'timestamp without time zone',
+                'not null' => FALSE,
+                'description' => 'Date at which the result was last modified',
+            ),
+            'changedby' => array(
+                'type' => 'int',
+                'not null' => FALSE,
+                'description' => 'ID of the user who last modified the result',
+            ),
+            'status' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'default' => 0,
+                'size' => 'small',
+                'description' => 'Visibility status of the result. 0 = visible, 1 = disabled',
+            ),
+        ),
+        'primary key' => array('id'),
+    );
+
+    $schema['qatracker_site'] = array(
+        'description' => 'Definition of tracker instances',
+        'fields' => array(
+            'id' => array(
+                'type' => 'serial',
+                'not null' => TRUE,
+                'description' => 'Primary Key',
+            ),
+            'subdomain' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'URL valid for this site',
+            ),
+            'title' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'Name of the instance',
+            ),
+            'userrole' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Role required to post results to the instance',
+            ),
+            'adminrole' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Role required to adminster the instance',
+            ),
+            'testcaserole' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Role required to adminster testcases for the instance',
+            ),
+        ),
+        'primary key' => array('id'),
+    );
+
+    $schema['qatracker_site_setting'] = array(
+        'description' => 'Definition of tracker instance settings',
+        'fields' => array(
+            'id' => array(
+                'type' => 'serial',
+                'not null' => TRUE,
+                'description' => 'Primary Key',
+            ),
+            'siteid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_site',
+            ),
+            'option' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'Name of the option (key)',
+            ),
+            'value' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'Value of the option',
+            ),
+        ),
+        'primary key' => array('id'),
+    );
+
+    $schema['qatracker_testcase'] = array(
+        'description' => 'Testcase for a given product',
+        'fields' => array(
+            'id' => array(
+                'type' => 'serial',
+                'not null' => TRUE,
+                'description' => 'Primary Key',
+            ),
+            'siteid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_site',
+            ),
+            'title' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'Name of the testcase',
+            ),
+            'link' => array(
+                'type' => 'varchar',
+                'not null' => FALSE,
+                'description' => 'Link to the testcase',
+            ),
+        ),
+        'primary key' => array('id'),
+    );
+
+    $schema['qatracker_testcase_revision'] = array(
+        'description' => 'Specific revisions of a testcase',
+        'fields' => array(
+            'id' => array(
+                'type' => 'serial',
+                'not null' => TRUE,
+                'description' => 'Primary key',
+            ),
+            'testcaseid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_testcase',
+            ),
+            'text' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'Definition of the test',
+            ),
+            'createdby' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Author',
+            ),
+            'createdat' => array(
+                'type' => 'varchar',
+                'pgsql_type' => 'timestamp without time zone',
+                'not null' => TRUE,
+                'description' => 'Creation date',
+            ),
+        ),
+        'primary key' => array('id'),
+    );
+
+    $schema['qatracker_testcase_identifier'] = array(
+        'description' => 'String identifier for a testcase',
+        'fields' => array(
+            'testcaseid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_testcase',
+            ),
+            'siteid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_site',
+            ),
+            'title' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'Alternate testcase ID',
+            ),
+        ),
+        'primary key' => array('siteid', 'title'),
+    );
+
+    $schema['qatracker_testsuite'] = array(
+        'description' => 'Testsuite',
+        'fields' => array(
+            'id' => array(
+                'type' => 'serial',
+                'not null' => TRUE,
+                'description' => 'Primary Key',
+            ),
+            'siteid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_site',
+            ),
+            'title' => array(
+                'type' => 'varchar',
+                'not null' => TRUE,
+                'description' => 'Name of the testcase',
+            ),
+        ),
+        'primary key' => array('id'),
+    );
+
+    $schema['qatracker_testsuite_product'] = array(
+        'description' => 'Link between testsuite and products/series',
+        'fields' => array(
+            'testsuiteid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_testsuite',
+            ),
+            'milestone_seriesid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_milestone_series',
+            ),
+            'productid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_product',
+            ),
+        ),
+        'primary key' => array('testsuiteid', 'milestone_seriesid', 'productid'),
+    );
+
+    $schema['qatracker_testsuite_testcase'] = array(
+        'description' => 'Link between testsuite and testcases',
+        'fields' => array(
+            'testsuiteid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_testsuite',
+            ),
+            'testcaseid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_testcase',
+            ),
+            'status' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'default' => 0,
+                'size' => 'small',
+                'description' => 'Visibility status of the testcase. 0 = visible, 1 = disabled, 2 = run-once, 3 = optional',
+            ),
+            'weight' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'default' => 0,
+                'size' => 'small',
+                'description' => 'Weight for ordering',
+            ),
+        ),
+        'primary key' => array('testsuiteid', 'testcaseid'),
+    );
+
+    $schema['qatracker_user_subscription'] = array(
+        'description' => 'Subscriptions to a testcase',
+        'fields' => array(
+            'productid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_product',
+            ),
+            'testcaseid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'Relation with qatracker_testcase',
+            ),
+            'userid' => array(
+                'type' => 'int',
+                'not null' => TRUE,
+                'description' => 'ID of the user',
+            ),
+        ),
+        'primary key' => array('productid', 'testcaseid', 'userid'),
+    );
+
+    return $schema;
+}
+
+function qatracker_update_7200() {
+    $schema = qatracker_schema();
+
+    # Add ownerrole column to qatracker_product
+    db_add_field('qatracker_product', 'ownerrole', $schema['qatracker_product']['fields']['ownerrole']);
+
+    # Add ownerrole column to qatracker_product
+    db_add_field('qatracker_product', 'buginstruction', $schema['qatracker_product']['fields']['buginstruction']);
+
+    # Add revisionid column to qatracker_result
+    db_add_field('qatracker_result', 'revisionid', $schema['qatracker_result']['fields']['revisionid']);
+
+    # Create qatracker_testsuite
+    db_create_table('qatracker_testsuite', $schema['qatracker_testsuite']);
+
+    # Create qatracker_testsuite_product
+    db_create_table('qatracker_testsuite_product', $schema['qatracker_testsuite_product']);
+
+    # Create qatracker_testsuite_testcase
+    db_create_table('qatracker_testsuite_testcase', $schema['qatracker_testsuite_testcase']);
+
+    # Create qatracker_testcase_identifier
+    db_create_table('qatracker_testcase_identifier', $schema['qatracker_testcase_identifier']);
+
+    # Create qatracker_testcase_revision
+    db_create_table('qatracker_testcase_revision', $schema['qatracker_testcase_revision']);
+
+    # Transition any milestone without a series to a generic "Unknown" series
+    $query = db_select('qatracker_site');
+    $query->fields('qatracker_site', array('id'));
+    $sites = $query->execute();
+
+    foreach ($sites as $site_record) {
+        # Get all the milestones for the site
+        $query = db_select('qatracker_milestone');
+        $query->fields('qatracker_milestone', array('id', 'seriesid'));
+        $query->condition('qatracker_milestone.siteid', $site_record->id);
+        $query->isNull('qatracker_milestone.seriesid');
+        $milestones = $query->execute();
+
+        # If all entries already have a series, just skip to the next site
+        if ($milestones->rowCount() == 0) {
+            continue;
+        }
+
+        # Look for an existing "Unknown" series
+        $query = db_select('qatracker_milestone_series');
+        $query->fields('qatracker_milestone_series', array('id'));
+        $query->condition('qatracker_milestone_series.title', 'Unknown');
+        $query->condition('qatracker_milestone_series.siteid', $site_record->id);
+        $unknown_series = $query->execute()->fetchField();
+
+        # If missing, add the "Unknown" series
+        if (!$unknown_series) {
+            $query = db_insert('qatracker_milestone_series');
+            $query->fields(array(
+                'siteid' => $site_record->id,
+                'title' => "Unknown",
+            ));
+            $unknown_series = $query->execute();
+        }
+
+        foreach ($milestones as $milestone_record) {
+            # Ignore these that already have it set
+            if ($milestone_record->seriesid) {
+                continue;
+            }
+
+            # Set the series
+            $query = db_update('qatracker_milestone');
+            $query->fields(array(
+                'seriesid' => $unknown_series,
+            ));
+            $query->condition('qatracker_milestone.id', $milestone_record->id);
+            $query->execute();
+        }
+    }
+
+    # Mark qatracker_milestone.seriesid as NOT NULL
+    db_change_field("qatracker_milestone", "seriesid", "seriesid", $schema['qatracker_milestone']['fields']['seriesid']);
+
+    # Add siteid column to qatracker_testcase
+    $testcase_siteid = array(
+        'type' => 'int',
+        'not null' => FALSE,
+        'description' => 'Relation with qatracker_site',
+    );
+    db_add_field('qatracker_testcase', 'siteid', $testcase_siteid);
+
+    # Add productid column to qatracker_user_subscription
+    $subscription_productid = array(
+        'type' => 'int',
+        'not null' => FALSE,
+        'description' => 'Relation with qatracker_productid',
+    );
+    db_add_field('qatracker_user_subscription', 'productid', $subscription_productid);
+
+    # Transition current testcases into a testsuite
+    $query = db_select('qatracker_product');
+    $query->fields('qatracker_product', array('id', 'siteid', 'title'));
+    $products = $query->execute();
+
+    foreach ($products as $product_record) {
+        # Create new testsuite
+        $query = db_insert('qatracker_testsuite');
+        $query->fields(array(
+            'siteid' => $product_record->siteid,
+            'title' => "Legacy testcases for '".$product_record->title."'",
+        ));
+        $testsuite_id = $query->execute();
+
+        # Add all current testcases to the new testsuite and set the siteid as we go through
+        $query = db_select('qatracker_testcase');
+        $query->fields('qatracker_testcase', array('id', 'status', 'weight'));
+        $query->condition('qatracker_testcase.productid', $product_record->id);
+        $testcases = $query->execute();
+
+        foreach ($testcases as $testcase_record) {
+            $query = db_insert('qatracker_testsuite_testcase');
+            $query->fields(array(
+                'testsuiteid' => $testsuite_id,
+                'testcaseid' => $testcase_record->id,
+                'status' => $testcase_record->status,
+                'weight' => $testcase_record->weight,
+            ));
+            $query->execute();
+
+            $query = db_update('qatracker_testcase');
+            $query->fields(array(
+                'siteid' => $product_record->siteid,
+            ));
+            $query->condition('qatracker_testcase.id', $testcase_record->id);
+            $query->execute();
+
+            $query = db_update('qatracker_user_subscription');
+            $query->fields(array(
+                'productid' => $product_record->id,
+            ));
+            $query->condition('qatracker_user_subscription.testcaseid', $testcase_record->id);
+            $query->execute();
+        }
+
+        # Link the new testsuite with all existing series
+        $query = db_select('qatracker_milestone_series');
+        $query->fields('qatracker_milestone_series', array('id'));
+        $query->condition('qatracker_milestone_series.siteid', $product_record->siteid);
+        $series = $query->execute();
+
+        foreach ($series as $series_record) {
+            $query = db_insert('qatracker_testsuite_product');
+            $query->fields(array(
+                'testsuiteid' => $testsuite_id,
+                'milestone_seriesid' => $series_record->id,
+                'productid' => $product_record->id,
+            ));
+            $query->execute();
+        }
+    }
+
+    # Prepare to transition roles from string to int and add the new testcase role
+    $query = db_select('role');
+    $query->fields('role', array('rid', 'name'));
+    $mapping = $query->execute()->fetchAllKeyed(1,0);
+
+    $query = db_select('qatracker_site');
+    $query->fields('qatracker_site', array('id', 'userrole', 'adminrole'));
+    $sites = $query->execute();
+
+    db_drop_field("qatracker_site", "userrole");
+    db_drop_field("qatracker_site", "adminrole");
+    db_drop_field("qatracker_site", "testcaserole");
+
+    $role_field = array(
+        'type' => 'int',
+        'not null' => FALSE,
+        'description' => 'Temporary role field',
+    );
+    db_add_field('qatracker_site', 'userrole', $role_field);
+    db_add_field('qatracker_site', 'adminrole', $role_field);
+    db_add_field('qatracker_site', 'testcaserole', $role_field);
+
+    foreach ($sites as $site) {
+        $query = db_update('qatracker_site');
+        $query->condition('qatracker_site.id', $site->id);
+        $query->fields(array(
+            'userrole' => array_key_exists($site->userrole, $mapping) ? $mapping[$site->userrole] : 2,
+            'adminrole' => array_key_exists($site->adminrole, $mapping) ? $mapping[$site->adminrole] : 3,
+            'testcaserole' => array_key_exists($site->adminrole, $mapping) ? $mapping[$site->adminrole] : 3,
+        ));
+        $query->execute();
+    }
+
+    db_change_field("qatracker_site", "userrole", "userrole", $schema['qatracker_site']['fields']['userrole']);
+    db_change_field("qatracker_site", "adminrole", "adminrole", $schema['qatracker_site']['fields']['adminrole']);
+    db_change_field("qatracker_site", "testcaserole", "testcaserole", $schema['qatracker_site']['fields']['testcaserole']);
+
+    # Mark qatracker_testcase.siteid as NOT NULL
+    db_change_field("qatracker_testcase", "siteid", "siteid", $schema['qatracker_testcase']['fields']['siteid']);
+
+    # Mark qatracker_testcase.siteid as NOT NULL
+    db_change_field("qatracker_user_subscription", "productid", "productid", $schema['qatracker_user_subscription']['fields']['productid']);
+
+    # Mark qatracker_product_download.seriesid as NULL allowed
+    db_change_field("qatracker_product_download", "seriesid", "seriesid", $schema['qatracker_product_download']['fields']['seriesid']);
+
+    # Remove qatracker_testcase.productid
+    db_drop_field("qatracker_testcase", "productid");
+
+    # Remove qatracker_testcase.status
+    db_drop_field("qatracker_testcase", "status");
+
+    # Remove qatracker_testcase.weight
+    db_drop_field("qatracker_testcase", "weight");
+
+    # Remove qatracker_user_subscription.id
+    db_drop_field("qatracker_user_subscription", "id");
+
+    # Remove qatracker_site.logo
+    db_drop_field("qatracker_site", "logo");
+
+    # Update primary key for qatracker_user_subscription
+    db_add_primary_key("qatracker_user_subscription", array("productid", "testcaseid", "userid"));
+}
+
+function qatracker_update_7201() {
+    $schema = qatracker_schema();
+
+    # Add new field on qatracker_build, available. Defaults to yes (1).
+    db_add_field('qatracker_build', 'available', $schema['qatracker_build']['fields']['available']);
+}
+
+function qatracker_update_7202() {
+    $schema = qatracker_schema();
+
+    # Introduce product manifest
+    db_create_table('qatracker_milestone_series_manifest', $schema['qatracker_milestone_series_manifest']);
+
+    # Builds can now be part of multiple milestones
+    db_create_table('qatracker_build_milestone', $schema['qatracker_build_milestone']);
+
+
+    # Transition data
+    $query = db_select('qatracker_build');
+    $query->fields('qatracker_build', array('id', 'milestoneid', 'userid', 'note', 'date', 'status'));
+    $builds = $query->execute();
+
+    foreach ($builds as $build) {
+        $query = db_insert('qatracker_build_milestone');
+        $query->fields(array(
+            'buildid' => $build->id,
+            'milestoneid' => $build->milestoneid,
+            'userid' => $build->userid,
+            'note' => $build->note,
+            'date' => $build->date,
+            'status' => $build->status,
+        ));
+        $query->execute();
+    }
+
+    # Add new field for auto publish of builds based on manifest
+    db_add_field('qatracker_milestone', 'autofill', $schema['qatracker_milestone']['fields']['autofill']);
+
+    # Add new status field to milestone_series
+    db_add_field('qatracker_milestone_series', 'status', $schema['qatracker_milestone_series']['fields']['status']);
+
+    # Remove deprecated fields
+    db_drop_field("qatracker_build", "milestoneid");
+    db_drop_field("qatracker_build", "userid");
+    db_drop_field("qatracker_build", "note");
+    db_drop_field("qatracker_build", "date");
+    db_drop_field("qatracker_build", "status");
+}
+
+function qatracker_update_7203() {
+    $schema = qatracker_schema();
+
+    # Add new field for auto publish of builds based on manifest
+    db_add_field('qatracker_milestone_series_manifest', 'status',
+                 $schema['qatracker_milestone_series_manifest']['fields']['status']);
+}
+
+function qatracker_update_7204() {
+    $schema = qatracker_schema();
+
+    # Add the new rebuild table
+    db_create_table('qatracker_rebuild', $schema['qatracker_rebuild']);
+}
+
+function qatracker_update_7205() {
+    $schema = qatracker_schema();
+
+    # Update for new status codes
+    $query = db_update('qatracker_rebuild');
+    $query->fields(array('status' => 5));
+    $query->condition('qatracker_rebuild.status', 3);
+    $query->execute();
+
+    $query = db_update('qatracker_rebuild');
+    $query->fields(array('status' => 4));
+    $query->condition('qatracker_rebuild.status', 2);
+    $query->execute();
+}
+
+?>

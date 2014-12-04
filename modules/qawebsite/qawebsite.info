@@ -1,0 +1,4 @@
+name = "Common content for QA websites"
+description = "Contains javascript and PHP code used on more than one of the QA modules"
+package = Ubuntu QA
+core = 7.x

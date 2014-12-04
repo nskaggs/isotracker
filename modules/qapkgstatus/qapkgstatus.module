@@ -1,0 +1,77 @@
+<?php
+/*
+Copyright (C) 2008-2011 Stephane Graber <stgraber@ubuntu.com>
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+*/
+
+require_once("qapkgstatus.pages.php");
+require_once("qapkgstatus.functions.php");
+require_once("qapkgstatus.blocks.php");
+
+function qapkgstatus_cron() {
+    $download_source = variable_get('qapkgstatus_source','');
+    if (!valid_url($download_source)) {
+        return;
+    }
+
+    # Grab category.xml, this file contains the list of packages
+    $result = drupal_http_request($download_source."/category.xml");
+    if ($result->code != 200) {
+        return;
+    }
+
+    # Parse the XML file
+    $xml = new SimpleXMLElement($result->data);
+    $packages = $xml->xpath('/pkg-stats/category/package');
+
+    $urls = array();
+    foreach ($packages as $package) {
+        $pkgname = trim($package);
+        $urls[$pkgname] = $download_source."/".trim($package).".xml";
+    }
+
+    # Avoid removing all the packages on failure
+    if (count($urls) == 0) {
+        return;
+    }
+
+    # Download all the xml files to a temporary directory first
+    if (is_dir(drupal_realpath('temporary:///qapkgstatus.cron'))) {
+        file_unmanaged_delete_recursive('temporary:///qapkgstatus.cron');
+    }
+    drupal_mkdir('temporary:///qapkgstatus.cron');
+    foreach ($urls as $pkgname => $url) {
+        if (!system_retrieve_file($url, "temporary:///qapkgstatus.cron/".$pkgname.".xml", FALSE, FILE_EXISTS_REPLACE)) {
+            return;
+        }
+    }
+
+    # Now Move the files into place all at once, removing any existing file
+    if (is_dir(drupal_realpath('public:///qapkgstatus'))) {
+        file_unmanaged_delete_recursive('public:///qapkgstatus');
+    }
+    drupal_mkdir('public:///qapkgstatus');
+    foreach ($urls as $pkgname => $url) {
+        file_unmanaged_move("temporary:///qapkgstatus.cron/".$pkgname.".xml", "public:///qapkgstatus/".$pkgname.".xml", FILE_EXISTS_REPLACE);
+    }
+    file_unmanaged_delete_recursive('temporary:///qapkgstatus.cron');
+
+    # This shouldn't be needed as Drupal also flushes the cache
+    # though doing it again avoids any race condition
+    cache_clear_all('qapkgstatus', 'cache_page', TRUE);
+}
+
+?>

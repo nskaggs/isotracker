@@ -1,0 +1,268 @@
+#!/usr/bin/python
+# Written by Stephane Graber <stephane.graber@canonical.com>
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+
+import datetime
+import logging
+import os
+import sys
+import xmlrpclib
+from optparse import OptionParser
+from configobj import ConfigObj
+from storm.locals import create_database, DateTime, Int, ReferenceSet, Store, \
+                            Unicode
+
+
+# Database objects
+class LaunchpadBug(object):
+    __storm_table__ = "qatracker_launchpad_bug"
+    id = Int(primary=True)
+    originalbug = Int()
+    bugnumber = Int()
+    title = Unicode()
+    product = Unicode()
+    status = Unicode()
+    importance = Unicode()
+    assignee = Unicode()
+    commentscount = Int()
+    duplicatescount = Int()
+    subscriberscount = Int()
+    lastchange = DateTime()
+
+
+class SiteSetting(object):
+    __storm_table__ = "qatracker_site_setting"
+    id = Int(primary=True)
+    siteid = Int()
+    option = Unicode()
+    value = Unicode()
+
+
+class Site(object):
+    __storm_table__ = "qatracker_site"
+    id = Int(primary=True)
+    subdomain = Unicode()
+    title = Unicode()
+    userrole = Int()
+    adminrole = Int()
+    testcaserole = Int()
+
+
+# Command line options
+params = OptionParser(
+            description="Testing tracker Launchpad integration script")
+params.add_option("--config", nargs=1, metavar=("CONFIG"),
+    default="sync-lp-bugs.conf", help="Configuration file")
+params.add_option("--dbconfig", nargs=1, metavar=("DBCONFIG"),
+    default="database.conf", help="Database configuration file")
+params.add_option("--milestone-status", nargs=1, metavar=("MILESTONE_STATUS"),
+    default="testing", choices=("testing", "released", "disabled"),
+    help="disabled/released/testing")
+params.add_option("--update-only", help="Don't tag or comment",
+    action="store_true")
+args = params.parse_args()[0]
+
+# Configure logging
+logger = logging.StreamHandler()
+formatter = logging.Formatter(
+        "%(asctime)s [sync-lp-bugs] %(levelname)s [%(name)s] %(message)s")
+logger.setFormatter(formatter)
+logging.root.setLevel(logging.INFO)
+logging.root.addHandler(logger)
+
+# Load configuration
+if not os.path.exists(args.config):
+    logging.error("Unable to find configuration file: %s" % args.config)
+    sys.exit(1)
+
+if not os.path.exists(args.dbconfig):
+    logging.error("Unable to find database configuration file: %s" %
+                    args.dbconfig)
+    sys.exit(1)
+
+# Load launchpadlib
+from launchpadlib.launchpad import Launchpad
+from launchpadlib.uris import LPNET_SERVICE_ROOT
+from launchpadlib.credentials import Credentials
+
+# Initialize the cache
+cachedir = ".launchpadlib/cache"
+if not os.path.exists(cachedir):
+    os.makedirs(cachedir, 0700)
+
+# Get credential
+credfile = "sync-lp-bugs.cred"
+try:
+    credentials = Credentials()
+    credentials.load(open(credfile))
+    launchpad = Launchpad(credentials, LPNET_SERVICE_ROOT, cachedir)
+except:
+    launchpad = Launchpad.get_token_and_login("sync-lp-bugs",
+                                                LPNET_SERVICE_ROOT, cachedir)
+    launchpad.credentials.save(open(credfile, "w", 0600))
+
+# Load the configuration
+config = ConfigObj(args.config)
+config_db = ConfigObj(args.dbconfig)
+db_host = config_db['database']['host']
+db_user = config_db['database']['user']
+db_password = config_db['database']['password']
+db_database = config_db['database']['database']
+lock = int(config['script']['lock'])
+loglevel = int(config['script']['loglevel'])
+logging.root.setLevel(loglevel)
+qatracker_milestone_status = ['testing', 'released', 'disabled']
+milestone_status = qatracker_milestone_status.index(args.milestone_status)
+
+# Check for lock
+if lock == 1:
+    if os.path.exists("/tmp/sync-lp-bugs.lock"):
+        logging.error("Found lock file, exitting.")
+        sys.exit(1)
+    else:
+        open("/tmp/sync-lp-bugs.lock", "w+").close()
+
+# Connect to the database
+database = create_database("postgres://%s:%s@%s/%s" % (db_user, db_password,
+                                                        db_host, db_database))
+store = Store(database)
+Site.settings = ReferenceSet(Site.id, SiteSetting.siteid)
+
+for site in config['sites']:
+    site_domain = site
+    if not args.update_only:
+        site_do_comment = int(config['sites'][site]['comment'])
+        site_do_tag = int(config['sites'][site]['tag'])
+    else:
+        site_do_comment = 0
+        site_do_tag = 0
+
+    site_comment = None
+    site_tags = None
+    site_rpc = xmlrpclib.ServerProxy("http://%s/xmlrpc.php" %
+                                            site_domain).qatracker
+    site_bugurl = "http://%s/qatracker/reports/bugs" % site_domain
+
+    # Start by looking for the site in the database
+    site_dbrecords = store.find(Site, subdomain=unicode(site_domain))
+    if site_dbrecords.count() != 1:
+        logging.error("Unable to find site: %s" % site_domain)
+        continue
+    else:
+        logging.info("Processing bugs for site: %s" % site_domain)
+
+    # Look in the database for tags and comment message
+    for setting in site_dbrecords[0].settings:
+        if setting.option == "bug_tag" and site_do_tag == 1:
+            site_tags = [str(tag) for tag in setting.value.split()]
+        if setting.option == "bug_comment" and site_do_comment == 1:
+            site_comment = str(setting.value)
+
+    # Extract a list of all the milestones with the requested status
+    site_milestones = site_rpc.milestones.get_list([milestone_status])
+
+    # Build a list of bugs for the milestones
+    site_bugs = []
+    for milestone in site_milestones:
+        site_bugs += site_rpc.bugs.get_list(int(milestone['id']))
+
+    logging.info("Updating a total of %s bugs" % len(site_bugs))
+
+    # Do the update
+    for bug in site_bugs:
+        bug_number = int(bug['bugnumber'])
+        logging.debug("Processing bug: %s" % bug_number)
+
+        # Grab the bug from Launchpad
+        try:
+            bug_lp = launchpad.bugs[bug_number]
+            if bug_lp.duplicate_of:
+                bug_lp = launchpad.bugs[bug_lp.duplicate_of.id]
+        except KeyError:
+            logging.info("Unable to load bug: %s" % bug_number)
+            continue
+
+        # Try to grab the bug from the DB
+        bug_dbrecords = store.find(LaunchpadBug, originalbug=bug_number)
+        if bug_dbrecords.count() == 1:
+            bug_db = bug_dbrecords[0]
+        else:
+            bug_db = LaunchpadBug()
+
+        # Find the most interesting task
+        if len(bug_lp.bug_tasks) == 1:
+            bug_task = bug_lp.bug_tasks[0]
+        else:
+            for task in bug_lp.bug_tasks:
+                if 'ubuntu/+source' in task.self_link or \
+                    'ubuntu/+bug' in task.self_link:
+
+                    bug_task = task
+                    break
+            else:
+                bug_task = bug_lp.bug_tasks[0]
+
+        if bug_task.assignee:
+            try:
+                bug_assignee = unicode(bug_task.assignee.display_name)
+            except:
+                try:
+                    bug_assignee = unicode(bug_task.assignee.name)
+                except:
+                    bug_assignee = unicode("Unknown")
+        else:
+            bug_assignee = None
+
+        bug_db.originalbug = bug_number
+        bug_db.bugnumber = bug_lp.id
+        bug_db.title = unicode(bug_lp.title)
+        bug_db.product = unicode(bug_task.bug_target_display_name)
+        bug_db.status = unicode(bug_task.status)
+        bug_db.importance = unicode(bug_task.importance)
+        bug_db.assignee = bug_assignee
+        bug_db.duplicatescount = bug_lp.number_of_duplicates
+        bug_db.subscriberscount = len(bug_lp.subscriptions)
+        bug_db.lastchange = datetime.datetime.now()
+
+        # The description counts as a comment
+        bug_db.commentscount = bug_lp.message_count - 1
+
+        if site_tags and 'bot-stop-nagging' in bug_lp.tags:
+            logging.info("Found 'bot-stop-nagging' in tags so ignoring bug: %s"
+                            % bug_lp.id)
+
+        if site_tags and not 'bot-stop-nagging' in bug_lp.tags:
+            bug_tags = list(bug_lp.tags)
+            if site_comment and not set(site_tags).issubset(set(bug_tags)):
+                logging.info("Found new bug, adding comment to: %s"
+                                % bug_lp.id)
+                bug_lp.newMessage(content=site_comment.replace(
+                            '@results', "%s/%s" % (site_bugurl, bug_lp.id)))
+
+            for tag in site_tags:
+                if tag not in bug_tags:
+                    logging.info("Adding missing tag '%s' to: %s" %
+                                    (tag, bug_lp.id))
+                    bug_tags.append(tag)
+
+            bug_lp.tags = bug_tags
+            bug_lp.lp_save()
+
+        store.add(bug_db)
+        store.commit()
+
+if os.path.exists("/tmp/sync-lp-bugs.lock"):
+    os.remove("/tmp/sync-lp-bugs.lock")

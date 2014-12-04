@@ -1,0 +1,97 @@
+<?php
+/*
+Copyright (C) 2008-2012 Stephane Graber <stgraber@ubuntu.com>
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+*/
+
+# GLOBALS
+global $qatracker_build_milestone_status;
+$qatracker_build_milestone_status = array(t('Active'), t('Re-building'), t('Disabled'), t('Superseded'), t('Ready'));
+
+global $qatracker_milestone_notify, $qatracker_milestone_autofill, $qatracker_milestone_status;
+$qatracker_milestone_notify = array(t('No'), t('Yes'));
+$qatracker_milestone_autofill = array(t('No'), t('Yes'));
+$qatracker_milestone_status = array(t('Testing'), t('Released'), t('Archived'));
+
+global $qatracker_milestone_series_status;
+$qatracker_milestone_series_status = array(t('Active'), t('Disabled'));
+
+global $qatracker_milestone_series_manifest_status;
+$qatracker_milestone_series_manifest_status = array(t('Active'), t('Disabled'));
+
+global $qatracker_product_status, $qatracker_product_type;
+$qatracker_product_status = array(t('Active'), t('Disabled'));
+$qatracker_product_type = array(t('iso'), t('package'), t('hardware'));
+
+global $qatracker_product_download_type;
+$qatracker_product_download_type = array(t('HTTP'), t('RSYNC'), t('ZSYNC'), t('GPG signature'), t('MD5 checksum'), t('Comment'), t('Torrent'));
+
+global $qatracker_testsuite_testcase_status;
+$qatracker_testsuite_testcase_status = array(t('Mandatory'), t('Disabled'), t('Run-once'), t('Optional'));
+
+global $qatracker_result_result, $qatracker_result_status;
+$qatracker_result_result = array(t('Failed'), t('Passed'), t('In progress'));
+$qatracker_result_status = array(t('Active'), t('Disabled'));
+
+global $qatracker_rebuild_status;
+$qatracker_rebuild_status = array(t('Requested'), t('Queued'), t('Building'), t('Built'), t('Published'), t('Canceled'));
+
+# Theme tweaks
+drupal_add_css("th.select-all { width:0; }", 'inline');
+drupal_add_css("table.sticky-enabled td { vertical-align:top; }", 'inline');
+drupal_add_css("div.form-type-radios .form-radios .form-item { display:inline; padding-right:0.5em; }", 'inline');
+drupal_add_css("
+dl {
+  counter-reset: item1;
+}
+
+dt {
+  font-weight: bold;
+}
+
+dt:before {
+  counter-increment: item1;
+  content: counter(item1) \". \";
+}
+
+dd {
+  font-style: oblique;
+}
+
+dd ul {
+  font-style: normal;
+  margin: 0.2em 0 0 0 !important;
+  padding-left: 0 !important;
+}
+
+dl ul ul {
+ margin-left: 1.5em !important;
+}
+
+h3 {
+  display: inline;
+  font-size: 125%;
+  border-bottom: 1px solid #ccc;
+}
+", 'inline');
+
+
+require_once("qatracker.pages.php");
+require_once("qatracker.functions.php");
+require_once("qatracker.blocks.php");
+require_once("qatracker.xmlrpc.php");
+
+?>

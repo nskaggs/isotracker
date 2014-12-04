@@ -1,0 +1,67 @@
+#!/usr/bin/python
+# Written by Stephane Graber <stephane.graber@canonical.com>
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+
+from storm.locals import create_database, Int, Store
+from optparse import OptionParser
+from configobj import ConfigObj
+import os
+import sys
+
+# Database objects
+class TestsuiteProduct(object):
+    __storm_table__ = "qatracker_testsuite_product"
+    testsuiteid = Int()
+    milestone_seriesid = Int()
+    productid = Int()
+    __storm_primary__ = "testsuiteid", "milestone_seriesid", "productid"
+
+# Argument parsing
+params = OptionParser(
+            usage="Usage: %prog [options] from_series to_series",
+            description="Copy testsuites from a series to another")
+params.add_option("--dbconfig", nargs=1, metavar=("DBCONFIG"),
+    default="database.conf", help="Database configuration file")
+options, args = params.parse_args()
+
+if len(args) < 2:
+    params.error("from_series and to_series (ID of the series) are required")
+
+# Load configuration
+if not os.path.exists(options.dbconfig):
+    print("Unable to find database configuration file: %s" % options.dbconfig)
+    sys.exit(1)
+
+config_db = ConfigObj(options.dbconfig)
+db_host = config_db['database']['host']
+db_user = config_db['database']['user']
+db_password = config_db['database']['password']
+db_database = config_db['database']['database']
+
+
+# Connect to the database
+database = create_database("postgres://%s:%s@%s/%s" %
+                            (db_user, db_password, db_host, db_database))
+store = Store(database)
+
+links = set()
+for entry in store.find(TestsuiteProduct, milestone_seriesid=int(args[0])):
+    new_entry = TestsuiteProduct()
+    new_entry.testsuiteid = entry.testsuiteid
+    new_entry.milestone_seriesid = int(args[1])
+    new_entry.productid = entry.productid
+    store.add(new_entry)
+    store.commit()

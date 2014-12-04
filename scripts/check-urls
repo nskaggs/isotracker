@@ -1,0 +1,134 @@
+#!/usr/bin/python
+# Written by Stephane Graber <stephane.graber@canonical.com>
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+
+from storm.locals import create_database, DateTime, Int, Unicode, Reference, \
+                            ReferenceSet, Store
+from optparse import OptionParser
+from configobj import ConfigObj
+import httplib2
+import os
+import sys
+
+
+# Database objects
+class ProductDownload(object):
+    __storm_table__ = "qatracker_product_download"
+    id = Int(primary=True)
+    productid = Int()
+    seriesid = Int()
+    filename = Unicode()
+    path = Unicode()
+    type = Int()
+
+
+class MilestoneSeries(object):
+    __storm_table__ = "qatracker_milestone_series"
+    id = Int(primary=True)
+    siteid = Int()
+    title = Unicode()
+
+
+class Milestone(object):
+    __storm_table__ = "qatracker_milestone"
+    id = Int(primary=True)
+    siteid = Int()
+    seriesid = Int()
+    title = Unicode()
+    notify = Int()
+    status = Int()
+    series = Reference(seriesid, MilestoneSeries.id)
+
+
+class Build(object):
+    __storm_table__ = "qatracker_build"
+    id = Int(primary=True)
+    productid = Int()
+    version = Unicode()
+    available = Int()
+    product_downloads = ReferenceSet(productid, ProductDownload.productid)
+
+
+class BuildMilestone(object):
+    __storm_table__ = "qatracker_build_milestone"
+    id = Int(primary=True)
+    buildid = Int()
+    milestoneid = Int()
+    userid = Int()
+    note = Unicode()
+    date = DateTime()
+    status = Int()
+    milestone = Reference(milestoneid, Milestone.id)
+    build = Reference(buildid, Build.id)
+
+# Argument parsing
+params = OptionParser(
+            description="Link checker")
+params.add_option("--dbconfig", nargs=1, metavar=("DBCONFIG"),
+    default="database.conf", help="Database configuration file")
+args = params.parse_args()[0]
+
+# Load configuration
+if not os.path.exists(args.dbconfig):
+    print("Unable to find database configuration file: %s" % args.dbconfig)
+    sys.exit(1)
+
+config_db = ConfigObj(args.dbconfig)
+db_host = config_db['database']['host']
+db_user = config_db['database']['user']
+db_password = config_db['database']['password']
+db_database = config_db['database']['database']
+
+
+# Connect to the database
+database = create_database("postgres://%s:%s@%s/%s" %
+                            (db_user, db_password, db_host, db_database))
+store = Store(database)
+
+http = httplib2.Http()
+for entry in store.find(BuildMilestone):
+    if not entry.milestone:
+        print("Skipping build with invalid milestone: %s" % entry.id)
+        continue
+
+    if entry.build.available != 1 or entry.build.id not in (26923, 26924):
+        continue
+
+    update = False
+    for download in entry.build.product_downloads:
+        if download.type != 0:
+            continue
+
+        if download.seriesid and \
+            download.seriesid != entry.milestone.series.id:
+            continue
+
+        update = True
+        link = download.path.replace("SERIES",
+                                        entry.milestone.series.title.lower())
+        link = link.replace("VERSION", entry.build.version)
+
+        try:
+            response = http.request(link, 'HEAD')
+            if response[0]['status'] != "404":
+                break
+        except:
+            print("Skipping invalid URL: %s" % link)
+    else:
+        if update:
+            entry.build.available = 0
+            store.add(entry)
+            store.commit()

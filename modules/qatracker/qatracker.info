@@ -1,0 +1,9 @@
+name = "Testing tracker"
+description = "Testing tracker, used for ISO, laptop and any other kind of testing."
+package = Ubuntu QA
+core = 7.x
+configure = admin/config/services/qatracker
+dependencies[] = qawebsite
+version = 7.x-2.0
+scripts[] = misc/qatracker_bugdnd.js
+scripts[] = misc/qatracker_tooltip.js

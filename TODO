@@ -1,0 +1,47 @@
+STATUS
+ - User Interface
+  - Milestones          READY-for-alpha1
+  - Builds              READY-for-alpha1
+   - Download           READY-for-alpha1
+  - Testcases           READY-for-alpha1
+  - Results             READY-for-alpha1
+  - Subscriptions       TODO
+  - Profile             READY-for-alpha1
+  - Reports             READY-for-alpha1
+
+ - API
+  - builds.add          READY-for-alpha1
+  - results.add         TODO
+
+ - Notifications
+  - Builds              READY-for-alpha1 (just remove hardcoded e-mail)
+
+ - Admin Interface
+  - Summary             READY-for-alpha1
+  - Sites               READY-for-alpha1
+  - Product families    READY-for-alpha1
+  - Products            READY-for-alpha1
+   - Testcases          READY-for-alpha1
+   - Downloads          READY-for-alpha1
+  - Series              READY-for-alpha1
+  - Milestones          READY-for-alpha1
+  - Builds              READY-for-alpha1
+
+ - Migration scripts
+  - Data                READY-for-alpha1
+  - Users               READY-for-alpha1
+
+ - Reports
+  - Defects             READY-for-alpha1
+
+ - Server
+  - Get postfix running to spool mails          READY-for-alpha1
+  - Get the Launchpad update script running     READY-for-alpha1 (just switch tagging back on)
+
+ - DB scripts
+  - Write export script taking milestoneid and exporting everything linked to it (builds, results, bugs, ...)
+  - Write import script checking for results entered by an unknown UID so we can assign them to 0 (anonymous)
+
+ - Tests
+  - Test rendering in Firefox
+  - Test rendering in Chrome

@@ -1,0 +1,6 @@
+name = "Package status"
+description = "Parses .xml statistic files for Debian packages and shows these stats to the visitor"
+package = Ubuntu QA
+core = 7.x
+configure = admin/config/services/qapkgstatus
+dependencies[] = qawebsite
